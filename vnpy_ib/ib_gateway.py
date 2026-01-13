@@ -287,6 +287,7 @@ class IbApi(EWrapper):
         self.contracts: dict[str, ContractData] = {}
 
         self.subscribed: dict[str, SubscribeRequest] = {}
+        self.to_subscribe: dict[str, SubscribeRequest] = {}
         self.data_ready: bool = False
 
         self.history_req: HistoryRequest | None = None
@@ -358,8 +359,10 @@ class IbApi(EWrapper):
 
             self.client.reqCurrentTime()
 
-            reqs: list = list(self.subscribed.values())
+            reqs: list = [*self.subscribed.values(), *self.to_subscribe.values()]
             self.subscribed.clear()
+            self.to_subscribe.clear()
+
             for req in reqs:
                 self.subscribe(req)
 
@@ -933,6 +936,10 @@ class IbApi(EWrapper):
         # 过滤重复订阅
         if req.vt_symbol in self.subscribed:
             return
+        if not self.data_ready:
+            self.to_subscribe[req.vt_symbol] = req
+            return
+
         self.subscribed[req.vt_symbol] = req
 
         # 解析IB合约详情
@@ -1165,6 +1172,8 @@ class IbApi(EWrapper):
     def unsubscribe(self, req: SubscribeRequest) -> None:
         """退订tick数据更新"""
         # 移除订阅记录
+        if req.vt_symbol in self.to_subscribe:
+            self.to_subscribe.pop(req.vt_symbol)
         if req.vt_symbol not in self.subscribed:
             return
         self.subscribed.pop(req.vt_symbol)
